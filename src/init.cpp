@@ -1506,23 +1506,22 @@ bool AppInitMain(InitInterfaces& interfaces)
     int64_t nTotalCache = (gArgs.GetArg("-dbcache", nDefaultDbCache) << 20);
     nTotalCache = std::max(nTotalCache, nMinDbCache << 20); // total cache cannot be less than nMinDbCache
     nTotalCache = std::min(nTotalCache, nMaxDbCache << 20); // total cache cannot be greater than nMaxDbcache
-    auto nCustomCacheSize = nTotalCache; // used for customs
-    int64_t nBlockTreeDBCache = std::min(nTotalCache / 8, nMaxBlockDBCache << 20);
-    nTotalCache -= nBlockTreeDBCache;
-    int64_t nTxIndexCache = std::min(nTotalCache / 8, gArgs.GetBoolArg("-txindex", DEFAULT_TXINDEX) ? nMaxTxIndexCache << 20 : 0);
-    nTotalCache -= nTxIndexCache;
+
+    // Use the same dbcache for each
+    int64_t nCustomCacheSize = nTotalCache; // used for customs
+    int64_t nBlockTreeDBCache = nTotalCache;
+    int64_t nTxIndexCache = nTotalCache;
+    int64_t nCoinDBCache = nTotalCache;
+    nCoinCacheUsage = nTotalCache;
+    nCustomMemUsage = std::max((nTotalCache >> 8), (nMinDbCache << 16));
+    
     int64_t filter_index_cache = 0;
     if (!g_enabled_filter_types.empty()) {
         size_t n_indexes = g_enabled_filter_types.size();
-        int64_t max_cache = std::min(nTotalCache / 8, max_filter_index_cache << 20);
+        int64_t max_cache = std::min(nTotalCache, max_filter_index_cache << 20);
         filter_index_cache = max_cache / n_indexes;
-        nTotalCache -= filter_index_cache * n_indexes;
     }
-    int64_t nCoinDBCache = std::min(nTotalCache / 2, (nTotalCache / 4) + (1 << 23)); // use 25%-50% of the remainder for disk cache
-    nCoinDBCache = std::min(nCoinDBCache, nMaxCoinsDBCache << 20); // cap total coins db cache
-    nTotalCache -= nCoinDBCache;
-    nCoinCacheUsage = nTotalCache; // the rest goes to in-memory cache
-    nCustomMemUsage = std::max((nTotalCache >> 8), (nMinDbCache << 16)); // use significant less in-memory cache
+
     int64_t nMempoolSizeMax = gArgs.GetArg("-maxmempool", DEFAULT_MAX_MEMPOOL_SIZE) * 1000000;
     LogPrintf("Cache configuration:\n");
     LogPrintf("* Using %.1f MiB for block index database\n", nBlockTreeDBCache * (1.0 / 1024 / 1024));
