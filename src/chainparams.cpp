@@ -295,25 +295,6 @@ public:
         checkpointData = {
             {
                 {     0, consensus.hashGenesisBlock},
-                { 50000, uint256S("a45e6bf6ae858a287eb39021ea23880b4115c94e882e2b7c0fcfc98c317922cd")},
-                {100000, uint256S("3acd556dbd5e6e75bf463a15eeeeb54b6eab4a1f28039bdc343cc8c851cce45c")},
-                {150000, uint256S("46b231d42e5b002852708d48dec119bbc2d550fb67908f1e9f35102c1b45b94d")},
-                {200000, uint256S("414076e74894aaed3e1b52d64937f23289d59fe80e287c328a1281398bf9cb31")},
-                {250000, uint256S("d50a44503fa55cd01a78b98dea125e63b65aac720c96cca696857722e8149d77")},
-                {300000, uint256S("351c82cb8f77fba73e24223a9dd50954630560602c3a38f4d1c03dfa5cf1fd10")},
-                {350000, uint256S("ebc8737cb2caa77397f446e9a5aff72a2ca9e8305a6a6f8eb4b6c22f389bef08")},
-                {400000, uint256S("97c1014a66c9f327e04a59b3e1b4f551122d0698b6b1a98ec99555fffb474e9d")},
-                {450000, uint256S("03701a440b02d61b875ba2503bb53f1f1360cf66b4f0cf472e660a6809534379")},
-                {500000, uint256S("6a5b285bc68362deb66148069f55f82c02974056e73f5cc96971f7661ecd5880")},
-                {550000, uint256S("3f9aab70727d3cc76a3d406f520a71ccc6095aeea2d185e489f563320d429d5b")},
-                {597925, uint256S("0ff2aa3749300e3d0b5bc8d48f9d699bc42e222fe718dc011b33913127087c6d")},
-                {600000, uint256S("79ddf4537e40cb59335a0551e5edc7bd396e6949aa2864c3200ca66f9c455405")},
-                {650000, uint256S("f18d64dd75c53590e833d3068132a65644963d5c5aebb4c73d42cbde8dc28d68")},
-                {757420, uint256S("8d4918be2b2df30175f9e611d9ceb494215b93f2267075ace3f031e784cbccbe")},
-                {850000, uint256S("2d7d58ae18a74f73b9836a8fffd3f65ce409536e654a6c644ce735215238a004")},
-                {875000, uint256S("44d3b3ba8e920cef86b7ec096ab0a2e608d9fedc14a59611a76a5e40aa53145e")},
-                {895741, uint256S("61bc1d73c720990dde43a3fec1f703a222ec5c265e6d491efd60eeec1bdb6dc3")},
-                {1505965,uint256S("f7474c805de4f05673df2103bd5d8b8dea09b0d22f808ee957a9ceefc0720609")},
             }
         };
 
@@ -497,14 +478,7 @@ public:
         m_is_test_chain = true;
 
 
-        checkpointData = {
-            {
-                { 50000, uint256S("74a468206b59bfc2667aba1522471ca2f0a4b7cd807520c47355b040c7735ccc")},
-                {100000, uint256S("9896ac2c34c20771742bccda4f00f458229819947e02204022c8ff26093ac81f")},
-                {150000, uint256S("af9307f438f5c378d1a49cfd3872173a07ed4362d56155e457daffd1061742d4")},
-                {300000, uint256S("205b522772ce34206a08a635c800f99d2fc4e9696ab8c470dad7f5fa51dfea1a")},
-            }
-        };
+        checkpointData = {};
 
         chainTxData = ChainTxData{
             // Data from rpc: getchaintxstats 4096 04aed18435a87754fcccb32734a02cf9ee162292489a476334326e8cf8a1079f
@@ -680,11 +654,7 @@ public:
         m_is_test_chain = true;
 
 
-        checkpointData = {
-            {
-//                {546, uint256S("000000002a936ca763904c3c35fce2f3556c559c0214345d31b1bcebf76acb70")},
-            }
-        };
+        checkpointData = {};
 
         chainTxData = ChainTxData{
             /* nTime    */ 0,
