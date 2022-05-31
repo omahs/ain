@@ -1885,6 +1885,7 @@ bool AppInitMain(InitInterfaces& interfaces)
 
             // ConsolidateRewards2(*pcustomcsview, ::ChainActive().Height(), balancesToMigrate);
 
+            // TODO: Filter the iters properly.
             auto it = pcustomcsview->LowerBound<CCustomCSView::ByBalanceKey, BalanceKey>({});
             auto getIterIsValidFn = [it = std::ref(it)] { return it.get().Valid(); };
             auto advanceIterFn = [it = std::ref(it)] { it.get().Next(); };
