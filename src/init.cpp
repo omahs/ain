@@ -597,6 +597,7 @@ void SetupServerArgs()
     gArgs.AddArg("-server", "Accept command line and JSON-RPC commands", ArgsManager::ALLOW_ANY, OptionsCategory::RPC);
     gArgs.AddArg("-rpcallowcors=<host>", "Allow CORS requests from the given host origin. Include scheme and port (eg: -rpcallowcors=http://127.0.0.1:5000)", ArgsManager::ALLOW_ANY, OptionsCategory::RPC);
     gArgs.AddArg("-rpcstats", strprintf("Log RPC stats. (default: %u)", DEFAULT_RPC_STATS), ArgsManager::ALLOW_ANY, OptionsCategory::RPC);
+    gArgs.AddArg("-consolidaterewards=<token-symbol>", "Consolidate rewards on startup. Accepted multiple times for each token symbol", ArgsManager::ALLOW_ANY, OptionsCategory::DEBUG_TEST);
 
 #if HAVE_DECL_DAEMON
     gArgs.AddArg("-daemon", "Run in the background as a daemon and accept commands", ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
@@ -1863,6 +1864,47 @@ bool AppInitMain(InitInterfaces& interfaces)
         // Advertise witness capabilities.
         // The option to not set NODE_WITNESS is only used in the tests and should be removed.
         nLocalServices = ServiceFlags(nLocalServices | NODE_WITNESS);
+    }
+
+    if (gArgs.IsArgSet("-consolidaterewards")) {
+        const std::vector<std::string> tokenSymbolArgs = gArgs.GetArgs("-consolidaterewards");
+        auto fullRewardConsolidation = true;
+        for (const auto& tokenSymbol : tokenSymbolArgs) {
+            LogPrintf("Consolidate rewards for token: %s\n", tokenSymbol);
+            auto token = pcustomcsview->GetToken(tokenSymbol);
+            if (!token) continue;
+            fullRewardConsolidation = false;
+
+            // std::vector<std::pair<CScript, CAmount>> balancesToMigrate;
+            // pcustomcsview->ForEachBalance([&, tokenId = token->first](CScript const& owner, CTokenAmount balance) {
+            //     if (tokenId.v == balance.nTokenId.v && balance.nValue > 0) {
+            //         balancesToMigrate.emplace_back(owner, balance.nValue);
+            //     }
+            //     return true;
+            // });
+
+            // ConsolidateRewards2(*pcustomcsview, ::ChainActive().Height(), balancesToMigrate);
+
+            auto it = pcustomcsview->LowerBound<CCustomCSView::ByBalanceKey, BalanceKey>({});
+            auto getIterIsValidFn = [it = std::ref(it)] { return it.get().Valid(); };
+            auto advanceIterFn = [it = std::ref(it)] { it.get().Next(); };
+            auto getIterValueFn = [it = std::ref(it)] { return it.get().Key().owner; };
+
+            ConsolidateRewards(*pcustomcsview, ::ChainActive().Height(), 
+                getIterValueFn, getIterIsValidFn,
+                advanceIterFn);
+        }
+        if (fullRewardConsolidation) {
+            LogPrintf("Consolidate rewards for all addresses..\n");
+            std::vector<std::pair<CScript, CAmount>> balancesToMigrate;
+            pcustomcsview->ForEachBalance([&](CScript const& owner, CTokenAmount balance) {
+                if (balance.nValue > 0) {
+                    balancesToMigrate.emplace_back(owner, balance.nValue);
+                }
+                return true;
+            });
+            ConsolidateRewards2(*pcustomcsview, ::ChainActive().Height(), balancesToMigrate);
+        }
     }
 
     // ********************************************************* Step 11: import blocks
