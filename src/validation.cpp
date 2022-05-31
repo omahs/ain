@@ -3879,7 +3879,7 @@ void ConsolidateRewards(CCustomCSView &view, int height,
         std::function<CScript()> getIterValue, 
         std::function<bool()> getIsIterValid, 
         std::function<void()> advanceIter,
-        size_t sizeHint, int numWorkers) {
+        int64_t sizeHint, int numWorkers) {
     int nWorkers = numWorkers < 1 ? RewardConsolidationWorkersCount() : numWorkers;
     auto rewardsTime = GetTimeMicros();
     boost::asio::thread_pool workerPool(nWorkers);
@@ -3898,7 +3898,7 @@ void ConsolidateRewards(CCustomCSView &view, int height,
         // due to the segregated areas of operation.
         boost::asio::post(workerPool, [&, account = std::move(owner)]() {
             if (ShutdownRequested()) return;
-            
+
             LogPrintf("DEBUG:: Calc rewards: %s\n", ScriptToString(account));
             auto tempView = std::make_unique<CCustomCSView>(view);
             tempView->CalculateOwnerRewards(account, height);

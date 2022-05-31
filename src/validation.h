@@ -860,7 +860,7 @@ void ConsolidateRewards(CCustomCSView &view, int height,
         std::function<CScript()> getIterValue, 
         std::function<bool()> getIsIterValid, 
         std::function<void()> advanceIter,
-    size_t sizeHint = -1, int numWorkers = -1);
+    int64_t sizeHint = -1, int numWorkers = -1);
 
 void ConsolidateRewards2(CCustomCSView& view, int height, 
     const std::vector<std::pair<CScript, CAmount>> &items, int numWorkers = 0);
