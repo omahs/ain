@@ -1349,6 +1349,8 @@ UniValue getloaninfo(const JSONRPCRequest& request) {
     }()};
 
     boost::asio::post(workerPool, [&] {
+        // Note: This is an unsynchronized worker. All the data in use by this worker
+        // is exclusive to this worker.
         view.ForEachLoanScheme([&](const std::string& identifier, const CLoanSchemeData& data) {
             totalLoanSchemes++;
             return true;
@@ -1393,14 +1395,14 @@ UniValue getloaninfo(const JSONRPCRequest& request) {
     std::atomic<uint64_t> loansValTotal{0};
 
     view.ForEachVault([&](const CVaultId& vaultId, const CVaultData& data) {
-        boost::asio::post(workerPool, [&, &colsValTotal=colsValTotal, 
-            &loansValTotal=loansValTotal, &vaultsTotal=vaultsTotal,
-            vaultId=vaultId, height=height, useNextPrice=useNextPrice, 
+        boost::asio::post(workerPool, [&, &colsValTotal=colsValTotal, &loansValTotal=loansValTotal,
+            &vaultsTotal=vaultsTotal, vaultId=vaultId, height=height, useNextPrice=useNextPrice, 
             requireLivePrice=requireLivePrice] {
             auto collaterals = view.GetVaultCollaterals(vaultId);
             if (!collaterals)
                 collaterals = CBalances{};
-            auto rate = view.GetLoanCollaterals(vaultId, *collaterals, height, lastBlockTime, useNextPrice, requireLivePrice);
+            auto rate = view.GetLoanCollaterals(vaultId, *collaterals, height, lastBlockTime, 
+                useNextPrice, requireLivePrice);
             if (rate)
             {
                 colsValTotal.fetch_add(rate.val->totalCollaterals, std::memory_order_relaxed);

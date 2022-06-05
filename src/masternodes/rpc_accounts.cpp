@@ -1,6 +1,7 @@
 #include <masternodes/accountshistory.h>
 #include <masternodes/govvariables/attributes.h>
 #include <masternodes/mn_rpc.h>
+#include <boost/asio.hpp>
 
 std::string tokenAmountString(CTokenAmount const& amount) {
     const auto token = pcustomcsview->GetToken(amount.nTokenId);
@@ -1751,8 +1752,8 @@ UniValue sendtokenstoaddress(const JSONRPCRequest& request) {
     return signsend(rawTx, pwallet, optAuthTx)->GetHash().GetHex();
 }
 
-UniValue getburninfo(const JSONRPCRequest& request) {
-    RPCHelpMan{"getburninfo",
+UniValue getburninfo1(const JSONRPCRequest& request) {
+    RPCHelpMan{"getburninfo1",
                "\nReturns burn address and burnt coin and token information.\n"
                "Requires full acindex for correct amount, tokens and feeburn values.\n",
                {
@@ -1771,27 +1772,69 @@ UniValue getburninfo(const JSONRPCRequest& request) {
                        "}\n"
                },
                RPCExamples{
-                       HelpExampleCli("getburninfo", "")
-                       + HelpExampleRpc("getburninfo", "")
+                       HelpExampleCli("getburninfo1", "")
+                       + HelpExampleRpc("getburninfo1", "")
                },
     }.Check(request);
 
-    if (auto res = GetRPCResultCache().TryGet(request)) return *res;
+    // if (auto res = GetRPCResultCache().TryGet(request)) return *res;
+    auto time1 = GetTimeMicros();
 
     CAmount burntDFI{0};
     CAmount burntFee{0};
     CAmount auctionFee{0};
     CAmount paybackFee{0};
     CAmount dfiPaybackFee{0};
+
     CBalances burntTokens;
     CBalances dexfeeburn;
     CBalances paybackfees;
     CBalances paybacktokens;
     CBalances dfi2203Tokens;
 
+    CAmount burnt{0};
     UniValue dfipaybacktokens{UniValue::VARR};
 
     LOCK(cs_main);
+
+    auto height = ::ChainActive().Height();
+    auto fortCanningHeight = Params().GetConsensus().FortCanningHeight;
+    auto burnAddress = Params().GetConsensus().burnAddress;
+    auto view = *pcustomcsview;
+    auto &burnView = pburnHistoryDB;
+
+    auto time2 = GetTimeMicros();
+
+    if (auto attributes = pcustomcsview->GetAttributes()) {
+        CDataStructureV0 liveKey{AttributeTypes::Live, ParamIDs::Economy, EconomyKeys::PaybackDFITokens};
+        auto tokenBalances = attributes->GetValue(liveKey, CBalances{});
+        for (const auto& balance : tokenBalances.balances) {
+            if (balance.first == DCT_ID{0}) {
+                dfiPaybackFee = balance.second;
+            } else {
+                dfipaybacktokens.push_back(tokenAmountString({balance.first, balance.second}));
+            }
+        }
+        liveKey = {AttributeTypes::Live, ParamIDs::Economy, EconomyKeys::PaybackTokens};
+        auto paybacks = attributes->GetValue(liveKey, CTokenPayback{});
+        paybackfees = std::move(paybacks.tokensFee);
+        paybacktokens = std::move(paybacks.tokensPayback);
+
+        liveKey = {AttributeTypes::Live, ParamIDs::Economy, EconomyKeys::DFIP2203Burned};
+        dfi2203Tokens = attributes->GetValue(liveKey, CBalances{});
+    }
+
+    auto time3 = GetTimeMicros();
+
+    for (const auto& kv : Params().GetConsensus().newNonUTXOSubsidies) {
+        if (kv.first == CommunityAccountType::Unallocated || 
+            kv.first == CommunityAccountType::IncentiveFunding ||
+            (height >= fortCanningHeight  && kv.first == CommunityAccountType::Loan)) {
+            burnt += view.GetCommunityBalance(kv.first);
+        }
+    }
+
+    auto time4 = GetTimeMicros();
 
     auto calcBurn = [&](AccountHistoryKey const & key, CLazySerialize<AccountHistoryValue> valueLazy) {
         const auto & value = valueLazy.get();
@@ -1844,38 +1887,13 @@ UniValue getburninfo(const JSONRPCRequest& request) {
     AccountHistoryKey startKey{{}, 
         std::numeric_limits<uint32_t>::max(), 
         std::numeric_limits<uint32_t>::max()};
-        
-    pburnHistoryDB->ForEachAccountHistory(calcBurn, startKey);
 
-    if (auto attributes = pcustomcsview->GetAttributes()) {
-        CDataStructureV0 liveKey{AttributeTypes::Live, ParamIDs::Economy, EconomyKeys::PaybackDFITokens};
-        auto tokenBalances = attributes->GetValue(liveKey, CBalances{});
-        for (const auto& balance : tokenBalances.balances) {
-            if (balance.first == DCT_ID{0}) {
-                dfiPaybackFee = balance.second;
-            } else {
-                dfipaybacktokens.push_back(tokenAmountString({balance.first, balance.second}));
-            }
-        }
-        liveKey = {AttributeTypes::Live, ParamIDs::Economy, EconomyKeys::PaybackTokens};
-        auto paybacks = attributes->GetValue(liveKey, CTokenPayback{});
-        paybackfees = std::move(paybacks.tokensFee);
-        paybacktokens = std::move(paybacks.tokensPayback);
+    burnView->ForEachAccountHistory(calcBurn, startKey);
 
-        liveKey = {AttributeTypes::Live, ParamIDs::Economy, EconomyKeys::DFIP2203Burned};
-        dfi2203Tokens = attributes->GetValue(liveKey, CBalances{});
-    }
-
-    CAmount burnt{0};
-    for (const auto& kv : Params().GetConsensus().newNonUTXOSubsidies) {
-        if (kv.first == CommunityAccountType::Unallocated || kv.first == CommunityAccountType::IncentiveFunding ||
-        (::ChainActive().Height() >= Params().GetConsensus().FortCanningHeight && kv.first == CommunityAccountType::Loan)) {
-            burnt += pcustomcsview->GetCommunityBalance(kv.first);
-        }
-    }
+    auto time5 = GetTimeMicros();
 
     UniValue result(UniValue::VOBJ);
-    result.pushKV("address", ScriptToString(Params().GetConsensus().burnAddress));
+    result.pushKV("address", ScriptToString(burnAddress));
     result.pushKV("amount", ValueFromAmount(burntDFI));
 
     result.pushKV("tokens", AmountsToJSON(burntTokens.balances));
@@ -1893,44 +1911,302 @@ UniValue getburninfo(const JSONRPCRequest& request) {
     result.pushKV("emissionburn", ValueFromAmount(burnt));
     result.pushKV("dfip2203", AmountsToJSON(dfi2203Tokens.balances));
 
+    auto time6 = GetTimeMicros();
+    auto m = [](int64_t time) { return time * 0.001; };
+
+    LogPrintf("DEBUG:: single: lock: %.2fms, attrs: %.2fms, comm: %.2fms, acc: %.2fms, json: %.2fms, all: %.2fms\n",
+        m(time2 - time1),
+        m(time3 - time2),
+        m(time4 - time3),
+        m(time5 - time4),
+        m(time6 - time5),
+        m(time6 - time1));
+
+    return GetRPCResultCache()
+        .Set(request, result);
+}
+
+UniValue getburninfo(const JSONRPCRequest& request) {
+    RPCHelpMan{"getburninfo",
+               "\nReturns burn address and burnt coin and token information.\n"
+               "Requires full acindex for correct amount, tokens and feeburn values.\n",
+               {
+               },
+               RPCResult{
+                       "{\n"
+                       "  \"address\" : \"address\",        (string) The defi burn address\n"
+                       "  \"amount\" : n.nnnnnnnn,        (string) The amount of DFI burnt\n"
+                       "  \"tokens\" :  [\n"
+                       "      { (array of burnt tokens)"
+                       "      \"name\" : \"name\"\n"
+                        "      \"amount\" : n.nnnnnnnn\n"
+                       "    ]\n"
+                       "  \"feeburn\" : n.nnnnnnnn,        (string) The amount of fees burnt\n"
+                       "  \"emissionburn\" : n.nnnnnnnn,   (string) The amount of non-utxo coinbase rewards burnt\n"
+                       "}\n"
+               },
+               RPCExamples{
+                       HelpExampleCli("getburninfo", "")
+                       + HelpExampleRpc("getburninfo", "")
+               },
+    }.Check(request);
+
+    // if (auto res = GetRPCResultCache().TryGet(request)) return *res;
+
+    auto time1 = GetTimeMicros();
+
+    auto numWorkers = []() {
+        const size_t workersMax = GetNumCores() - 1;
+        return std::min(workersMax > 2 ? workersMax : 3, static_cast<size_t>(4));
+    }();
+
+    // This is a special case. We need to shard the data across workers. So, 
+    // instead of creating a pool of N and synchronize them manually, we'll 
+    // spin up a N thread pools of 1 thread each - and each thread keeps it's own 
+    // accounting copy that it's free to work on without synchronization - and 
+    // we'll keep sharding the work across and merge in the end. 
+    // The downside is, there will be no work stealing, and there can be tail
+    // latencies - and have an additional merge phase.
+    class WorkerCtx {
+    public:
+        boost::asio::thread_pool worker{1};
+        CAmount burntDFI{0};
+        CAmount burntFee{0};
+        CAmount auctionFee{0};
+        CAmount paybackFee{0};
+        CBalances burntTokens;
+        CBalances dexfeeburn;
+        int64_t t{0};
+    };
+
+    // Sharded workers
+    WorkerCtx workers[numWorkers];
+    // Off shoot worker for non sharded data
+    boost::asio::thread_pool offShootWorker{1};
+
+    // Non sharded data sets
+    CBalances paybackfees;
+    CBalances paybacktokens;
+    CBalances dfi2203Tokens;
+
+    CAmount burnt{0};
+    CAmount dfiPaybackFee{0};
+    UniValue dfipaybacktokens{UniValue::VARR};
+
+    auto time2 = GetTimeMicros();
+
+    LOCK(cs_main);
+
+    auto time3 = GetTimeMicros();
+
+    auto height = ::ChainActive().Height();
+    auto fortCanningHeight = Params().GetConsensus().FortCanningHeight;
+    auto burnAddress = Params().GetConsensus().burnAddress;
+    auto view = *pcustomcsview;
+    auto& burnView = pburnHistoryDB;
+
+    boost::asio::post(offShootWorker, [&]() {
+        auto t1 = GetTimeMicros();
+        if (auto attributes = view.GetAttributes()) {
+            CDataStructureV0 liveKey{AttributeTypes::Live, ParamIDs::Economy, EconomyKeys::PaybackDFITokens};
+            auto tokenBalances = attributes->GetValue(liveKey, CBalances{});
+            for (const auto& balance : tokenBalances.balances) {
+                if (balance.first == DCT_ID{0}) {
+                    dfiPaybackFee = balance.second;
+                } else {
+                    dfipaybacktokens.push_back(tokenAmountString({balance.first, balance.second}));
+                }
+            }
+            liveKey = {AttributeTypes::Live, ParamIDs::Economy, EconomyKeys::PaybackTokens};
+            auto paybacks = attributes->GetValue(liveKey, CTokenPayback{});
+            paybackfees = std::move(paybacks.tokensFee);
+            paybacktokens = std::move(paybacks.tokensPayback);
+
+            liveKey = {AttributeTypes::Live, ParamIDs::Economy, EconomyKeys::DFIP2203Burned};
+            dfi2203Tokens = attributes->GetValue(liveKey, CBalances{});
+        }
+
+        auto t2 = GetTimeMicros();
+
+        for (const auto& kv : Params().GetConsensus().newNonUTXOSubsidies) {
+            if (kv.first == CommunityAccountType::Unallocated ||
+                kv.first == CommunityAccountType::IncentiveFunding ||
+                (height >= fortCanningHeight && kv.first == CommunityAccountType::Loan)) {
+                burnt += view.GetCommunityBalance(kv.first);
+            }
+        }
+        auto m = [](int64_t time) { return time * 0.001; };
+
+        auto t3 = GetTimeMicros();
+        LogPrintf("DEBUG:: worker-offshot: t1: %.2fms, t2: %.2fms, all: %.2fms\n", m(t2 - t2), m(t3 - t2), m(t3 - t1));
+    });
+
+    auto calculateBurnAmounts = [](WorkerCtx &ctx, AccountHistoryKey const& key, AccountHistoryValue value) {
+        auto &burntDFI = ctx.burntDFI;
+        auto &burntFee = ctx.burntFee;
+        auto &paybackFee = ctx.paybackFee;
+        auto &auctionFee = ctx.auctionFee;
+        auto &dexfeeburn = ctx.dexfeeburn;
+        auto &burntTokens = ctx.burntTokens;
+
+        // UTXO burn
+        if (value.category == uint8_t(CustomTxType::None)) {
+            for (auto const& diff : value.diff) {
+                burntDFI += diff.second;
+            }
+            return;
+        }
+        // Fee burn
+        if (value.category == uint8_t(CustomTxType::CreateMasternode) ||
+            value.category == uint8_t(CustomTxType::CreateToken) ||
+            value.category == uint8_t(CustomTxType::Vault)) {
+            for (auto const& diff : value.diff) {
+                burntFee += diff.second;
+            }
+            return;
+        }
+        // withdraw burn
+        if (value.category == uint8_t(CustomTxType::PaybackLoan) ||
+            value.category == uint8_t(CustomTxType::PaybackLoanV2)) {
+            for (auto const& diff : value.diff) {
+                paybackFee += diff.second;
+            }
+            return;
+        }
+        // auction burn
+        if (value.category == uint8_t(CustomTxType::AuctionBid)) {
+            for (auto const& diff : value.diff) {
+                auctionFee += diff.second;
+            }
+            return;
+        }
+        // dex fee burn
+        if (value.category == uint8_t(CustomTxType::PoolSwap) ||
+            value.category == uint8_t(CustomTxType::PoolSwapV2)) {
+            for (auto const& diff : value.diff) {
+                dexfeeburn.Add({diff.first, diff.second});
+            }
+            return;
+        }
+        // Token burn
+        for (auto const& diff : value.diff) {
+            burntTokens.Add({diff.first, diff.second});
+        }
+    };
+
+    AccountHistoryKey startKey{{},
+        std::numeric_limits<uint32_t>::max(),
+        std::numeric_limits<uint32_t>::max()};
+
+    auto i = 0;
+    burnView->ForEachAccountHistory([&](AccountHistoryKey const& key, AccountHistoryValue value) {
+        auto shard = i % numWorkers;
+        auto &ctx = workers[shard];
+        boost::asio::post(ctx.worker, [&, &ctx = ctx, &key = key, value = value]() {
+            auto t = GetTimeMicros();
+            calculateBurnAmounts(ctx, key, value);
+            ctx.t += GetTimeMicros() - t;
+        });
+        i++;
+        return true;
+    }, startKey);
+    
+    CAmount burntDFI{0};
+    CAmount burntFee{0};
+    CAmount auctionFee{0};
+    CAmount paybackFee{0};
+    CBalances burntTokens;
+    CBalances dexfeeburn;
+
+    auto time4 = GetTimeMicros();
+
+    i = 0;
+    for (auto& w : workers) {
+        w.worker.join();
+        burntDFI += w.burntDFI;
+        burntFee += w.burntFee;
+        auctionFee += w.auctionFee;
+        paybackFee += w.paybackFee;
+        burntTokens.AddBalances(w.burntTokens.balances);
+        dexfeeburn.AddBalances(w.dexfeeburn.balances);
+        LogPrintf("DEBUG:: worker-%d: %.2fms\n", i, (w.t) * 0.001);
+        i++;
+    }
+
+    auto time5 = GetTimeMicros();
+
+    offShootWorker.join();
+
+    auto time6 = GetTimeMicros();
+
+    UniValue result(UniValue::VOBJ);
+    result.pushKV("address", ScriptToString(burnAddress));
+    result.pushKV("amount", ValueFromAmount(burntDFI));
+
+    result.pushKV("tokens", AmountsToJSON(burntTokens.balances));
+    result.pushKV("feeburn", ValueFromAmount(burntFee));
+    result.pushKV("auctionburn", ValueFromAmount(auctionFee));
+    result.pushKV("paybackburn", ValueFromAmount(paybackFee));
+    result.pushKV("dexfeetokens", AmountsToJSON(dexfeeburn.balances));
+
+    result.pushKV("dfipaybackfee", ValueFromAmount(dfiPaybackFee));
+    result.pushKV("dfipaybacktokens", dfipaybacktokens);
+
+    result.pushKV("paybackfees", AmountsToJSON(paybackfees.balances));
+    result.pushKV("paybacktokens", AmountsToJSON(paybacktokens.balances));
+
+    result.pushKV("emissionburn", ValueFromAmount(burnt));
+    result.pushKV("dfip2203", AmountsToJSON(dfi2203Tokens.balances));
+
+    auto time7 = GetTimeMicros();
+    auto m = [](int64_t time) { return time * 0.001; };
+
+    LogPrintf("DEBUG:: multi: pre: %.2fms, lock: %.2fms, start: %.2fms, wait1: %.2fms, wait2: %.2fms, json: %.2fms, all: %.2fms\n",
+        m(time2 - time1),
+        m(time3 - time2),
+        m(time4 - time3),
+        m(time5 - time4),
+        m(time6 - time5),
+        m(time7 - time6),
+        m(time7 - time1));
     return GetRPCResultCache().Set(request, result);
 }
 
 UniValue HandleSendDFIP2201DFIInput(const JSONRPCRequest& request, CWalletCoinsUnlocker pwallet,
-        const std::pair<std::string, CScript>& contractPair, CTokenAmount amount) {
-    CUtxosToAccountMessage msg{};
-    msg.to = {{contractPair.second, {{{{0}, amount.nValue}}}}};
+    const std::pair<std::string, CScript>& contractPair, CTokenAmount amount) {
+        CUtxosToAccountMessage msg{};
+        msg.to = {{contractPair.second, {{{{0}, amount.nValue}}}}};
 
-    CDataStream metadata(DfTxMarker, SER_NETWORK, PROTOCOL_VERSION);
-    metadata << static_cast<unsigned char>(CustomTxType::UtxosToAccount)
-                << msg;
-    CScript scriptMeta;
-    scriptMeta << OP_RETURN << ToByteVector(metadata);
+        CDataStream metadata(DfTxMarker, SER_NETWORK, PROTOCOL_VERSION);
+        metadata << static_cast<unsigned char>(CustomTxType::UtxosToAccount)
+                 << msg;
+        CScript scriptMeta;
+        scriptMeta << OP_RETURN << ToByteVector(metadata);
 
-    int targetHeight = chainHeight(*pwallet->chain().lock()) + 1;
+        int targetHeight = chainHeight(*pwallet->chain().lock()) + 1;
 
-    const auto txVersion = GetTransactionVersion(targetHeight);
-    CMutableTransaction rawTx(txVersion);
+        const auto txVersion = GetTransactionVersion(targetHeight);
+        CMutableTransaction rawTx(txVersion);
 
-    rawTx.vout.push_back(CTxOut(amount.nValue, scriptMeta));
+        rawTx.vout.push_back(CTxOut(amount.nValue, scriptMeta));
 
-    // change
-    CCoinControl coinControl;
-    CTxDestination dest;
-    ExtractDestination(Params().GetConsensus().foundationShareScript, dest);
-    coinControl.destChange = dest;
+        // change
+        CCoinControl coinControl;
+        CTxDestination dest;
+        ExtractDestination(Params().GetConsensus().foundationShareScript, dest);
+        coinControl.destChange = dest;
 
-    // Only use inputs from dest
-    coinControl.matchDestination = dest;
+        // Only use inputs from dest
+        coinControl.matchDestination = dest;
 
-    // fund
-    fund(rawTx, pwallet, {}, &coinControl);
+        // fund
+        fund(rawTx, pwallet, {}, &coinControl);
 
-    // check execution
-    execTestTx(CTransaction(rawTx), targetHeight);
+        // check execution
+        execTestTx(CTransaction(rawTx), targetHeight);
 
-    return signsend(rawTx, pwallet, {})->GetHash().GetHex();
-}
+        return signsend(rawTx, pwallet, {})->GetHash().GetHex();
+    }
 
 UniValue HandleSendDFIP2201BTCInput(const JSONRPCRequest& request, CWalletCoinsUnlocker pwallet,
          const std::pair<std::string, CScript>& contractPair, CTokenAmount amount) {
@@ -2360,6 +2636,7 @@ static const CRPCCommand commands[] =
     {"accounts",    "listcommunitybalances", &listcommunitybalances, {}},
     {"accounts",    "sendtokenstoaddress",   &sendtokenstoaddress,   {"from", "to", "selectionMode"}},
     {"accounts",    "getburninfo",           &getburninfo,           {}},
+    {"accounts",    "getburninfo1",          &getburninfo1,          {}},
     {"accounts",    "executesmartcontract",  &executesmartcontract,  {"name", "amount", "inputs"}},
     {"accounts",    "futureswap",            &futureswap,            {"address", "amount", "destination", "inputs"}},
     {"accounts",    "withdrawfutureswap",    &withdrawfutureswap,    {"address", "amount", "destination", "inputs"}},
