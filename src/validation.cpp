@@ -4506,7 +4506,7 @@ static Res VaultSplits(CCustomCSView& view, ATTRIBUTES& attributes, const DCT_ID
             return Res::Err("Failed to get loan scheme.");
         }
 
-        view.EraseInterestForToken(vaultId, oldTokenId, height);
+        view.EraseInterest(vaultId, oldTokenId, height);
         auto oldRateToHeight = rate.interestToHeight;
         auto newRateToHeight = CalculateNewAmount(multiplier, rate.interestToHeight.amount);
 

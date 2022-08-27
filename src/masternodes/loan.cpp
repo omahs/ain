@@ -451,13 +451,15 @@ Res CLoanView::EraseInterest(const CVaultId& vaultId, uint32_t height)
     return Res::Ok();
 }
 
-void CLoanView::EraseInterestForToken(const CVaultId& vaultId, DCT_ID id, uint32_t height)
+Res CLoanView::EraseInterest(const CVaultId& vaultId, DCT_ID id, uint32_t height)
 {
     if (height >= static_cast<uint32_t>(Params().GetConsensus().GreatWorldHeight)) {
         EraseBy<LoanInterestV3ByVault>(std::make_pair(vaultId, id));
     } else if (height >= static_cast<uint32_t>(Params().GetConsensus().FortCanningHillHeight)) {
         EraseBy<LoanInterestV2ByVault>(std::make_pair(vaultId, id));
     }
+
+    return Res::Ok();
 }
 
 void CLoanView::RevertInterestRateToV1()

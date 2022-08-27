@@ -443,7 +443,7 @@ public:
     void ForEachDelayedDestroyScheme(std::function<bool (const std::string&, const uint64_t&)> callback);
 
     Res EraseInterest(const CVaultId& vaultId, uint32_t height);
-    void EraseInterestForToken(const CVaultId& vaultId, DCT_ID id, uint32_t height);
+    void EraseInterest(const CVaultId& vaultId, DCT_ID id, uint32_t height);
     std::optional<CInterestRateV3> GetInterestRate(const CVaultId& vaultId, const DCT_ID id, const uint32_t height);
     void WriteInterestRate(const std::pair<CVaultId, DCT_ID>& pair, const CInterestRateV3& rate, uint32_t height);
     Res IncreaseInterest(const uint32_t height, const CVaultId& vaultId, const std::string& loanSchemeID, const DCT_ID id, const CAmount tokenInterest, const CAmount loanIncreased);
