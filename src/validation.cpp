@@ -2367,7 +2367,7 @@ void CChainState::ProcessRewardEvents(const CBlockIndex* pindex, CCustomCSView& 
     }
 }
 
-std::vector<CAuctionBatch> CollectAuctionBatches(const CCollateralLoans& collLoan, const TAmounts& collBalances, const TAmounts& loanBalances)
+std::vector<CAuctionBatch> CollectAuctionBatches(const CVaultValueSheet& collLoan, const TAmounts& collBalances, const TAmounts& loanBalances)
 {
     constexpr const uint64_t batchThreshold = 10000 * COIN; // 10k USD
     auto totalCollateralsValue = collLoan.totalCollaterals;
@@ -3322,8 +3322,9 @@ void CChainState::ProcessLoanEvents(const CBlockIndex* pindex, CCustomCSView& ca
         bool useNextPrice = false, requireLivePrice = true;
 
         cache.ForEachVaultCollateral([&](const CVaultId& vaultId, const CBalances& collaterals) {
-            auto collateral = cache.GetLoanCollaterals(vaultId, collaterals, pindex->nHeight, pindex->nTime, useNextPrice, requireLivePrice);
-            if (!collateral) {
+            auto vaultValues = cache.GetVaultValueSheet(vaultId, collaterals, pindex->nHeight, pindex->nTime,
+                                                        useNextPrice, requireLivePrice);
+            if (!vaultValues) {
                 return true;
             }
 
@@ -3331,7 +3332,7 @@ void CChainState::ProcessLoanEvents(const CBlockIndex* pindex, CCustomCSView& ca
             assert(vault);
             auto scheme = cache.GetLoanScheme(vault->schemeId);
             assert(scheme);
-            if (scheme->ratio <= collateral.val->ratio()) {
+            if (scheme->ratio <= vaultValues.val->ratio()) {
                 // All good, within ratio, nothing more to do.
                 return true;
             }
@@ -3392,7 +3393,7 @@ void CChainState::ProcessLoanEvents(const CBlockIndex* pindex, CCustomCSView& ca
                 cache.SubVaultCollateral(vaultId, {tokenId, tokenValue});
             }
 
-            auto batches = CollectAuctionBatches(*collateral.val, collaterals.balances, loanTokens->balances);
+            auto batches = CollectAuctionBatches(*vaultValues.val, collaterals.balances, loanTokens->balances);
 
             // Now, let's add the remaining amounts and store the batch.
             for (auto i = 0u; i < batches.size(); i++) {
@@ -3416,7 +3417,7 @@ void CChainState::ProcessLoanEvents(const CBlockIndex* pindex, CCustomCSView& ca
 
             // Store state in vault DB
             if (pvaultHistoryDB) {
-                pvaultHistoryDB->WriteVaultState(cache, *pindex, vaultId, collateral.val->ratio());
+                pvaultHistoryDB->WriteVaultState(cache, *pindex, vaultId, vaultValues.val->ratio());
             }
 
             return true;

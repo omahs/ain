@@ -71,11 +71,12 @@ void CVaultHistoryView::WriteVaultState(CCustomCSView& mnview, const CBlockIndex
     }
 
     bool useNextPrice = false, requireLivePrice = false;
-    auto rate = mnview.GetLoanCollaterals(vaultID, *collaterals, pindex.nHeight, pindex.nTime, useNextPrice, requireLivePrice);
+    auto res = mnview.GetVaultValueSheet(vaultID, *collaterals, pindex.nHeight, pindex.nTime, useNextPrice,
+                                         requireLivePrice);
 
-    CCollateralLoans collateralLoans{0, 0, {}, {}};
-    if (rate) {
-        collateralLoans = *rate.val;
+    CVaultValueSheet vaultValues{0, 0, {}, {}};
+    if (res) {
+        vaultValues = *res.val;
     }
 
     std::vector<CAuctionBatch> batches;
@@ -87,7 +88,7 @@ void CVaultHistoryView::WriteVaultState(CCustomCSView& mnview, const CBlockIndex
         }
     }
 
-    VaultStateValue value{collaterals->balances, collateralLoans, batches, ratio};
+    VaultStateValue value{collaterals->balances, vaultValues, batches, ratio};
     WriteBy<ByVaultStateKey>(VaultStateKey{vaultID, static_cast<uint32_t>(pindex.nHeight)}, value);
 }
 

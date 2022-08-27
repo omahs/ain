@@ -314,7 +314,7 @@ public:
     struct KVSettings { static constexpr uint8_t prefix() { return '0'; } };
 };
 
-class CCollateralLoans { // in USD
+class CVaultValueSheet { // in USD
 
     double calcRatio(uint64_t maxRatio) const;
 
@@ -403,8 +403,8 @@ class CCustomCSView
         >();
     }
 private:
-    Res PopulateLoansData(CCollateralLoans& result, CVaultId const& vaultId, uint32_t height, int64_t blockTime, bool useNextPrice, bool requireLivePrice);
-    Res PopulateCollateralData(CCollateralLoans& result, CVaultId const& vaultId, CBalances const& collaterals, uint32_t height, int64_t blockTime, bool useNextPrice, bool requireLivePrice);
+    Res PopulateLoanValues(CVaultValueSheet& result, CVaultId const& vaultId, uint32_t height, int64_t blockTime, bool useNextPrice, bool requireLivePrice);
+    Res PopulateCollateralValues(CVaultValueSheet& result, CVaultId const& vaultId, CBalances const& collaterals, uint32_t height, int64_t blockTime, bool useNextPrice, bool requireLivePrice);
 
     std::unique_ptr<CAccountHistoryStorage> accHistoryStore;
     std::unique_ptr<CVaultHistoryStorage> vauHistoryStore;
@@ -438,7 +438,7 @@ public:
 
     ResVal<CAmount> GetAmountInCurrency(CAmount amount, CTokenCurrencyPair priceFeedId, bool useNextPrice = false, bool requireLivePrice = true);
 
-    ResVal<CCollateralLoans> GetLoanCollaterals(CVaultId const & vaultId, CBalances const & collaterals, uint32_t height, int64_t blockTime, bool useNextPrice = false, bool requireLivePrice = true);
+    ResVal<CVaultValueSheet> GetVaultValueSheet(CVaultId const & vaultId, CBalances const & collaterals, uint32_t height, int64_t blockTime, bool useNextPrice = false, bool requireLivePrice = true);
 
     ResVal<CAmount> GetValidatedIntervalPrice(const CTokenCurrencyPair& priceFeedId, bool useNextPrice, bool requireLivePrice);
 

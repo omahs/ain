@@ -80,7 +80,7 @@ struct VaultStateKey {
 
 struct VaultStateValue {
     TAmounts collaterals;
-    CCollateralLoans collateralsValues;
+    CVaultValueSheet collateralsValues;
     std::vector<CAuctionBatch> auctionBatches;
     uint32_t ratio;
 

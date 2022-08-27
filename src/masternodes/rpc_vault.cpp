@@ -50,12 +50,13 @@ namespace {
             return false;
 
         bool useNextPrice = true, requireLivePrice = false;
-        auto vaultRate = pcustomcsview->GetLoanCollaterals(vaultId, *collaterals, height, blockTime, useNextPrice, requireLivePrice);
-        if (!vaultRate)
+        auto vaultValues = pcustomcsview->GetVaultValueSheet(vaultId, *collaterals, height, blockTime, useNextPrice,
+                                                             requireLivePrice);
+        if (!vaultValues)
             return false;
 
         auto loanScheme = pcustomcsview->GetLoanScheme(vault.schemeId);
-        return (vaultRate.val->ratio() < loanScheme->ratio);
+        return (vaultValues.val->ratio() < loanScheme->ratio);
     }
 
     VaultState GetVaultState(const CVaultId& vaultId, const CVaultData& vault) {
@@ -136,11 +137,12 @@ namespace {
         auto blockTime = ::ChainActive().Tip()->GetBlockTime();
         bool useNextPrice = false, requireLivePrice = vaultState != VaultState::Frozen;
 
-        if (auto rate = pcustomcsview->GetLoanCollaterals(vaultId, *collaterals, height + 1, blockTime, useNextPrice, requireLivePrice)) {
-            collValue = ValueFromUint(rate.val->totalCollaterals);
-            loanValue = ValueFromUint(rate.val->totalLoans);
-            ratioValue = ValueFromAmount(rate.val->precisionRatio());
-            collateralRatio = int(rate.val->ratio());
+        if (auto vaultValues = pcustomcsview->GetVaultValueSheet(vaultId, *collaterals, height + 1, blockTime, useNextPrice,
+                                                                 requireLivePrice)) {
+            collValue = ValueFromUint(vaultValues.val->totalCollaterals);
+            loanValue = ValueFromUint(vaultValues.val->totalLoans);
+            ratioValue = ValueFromAmount(vaultValues.val->precisionRatio());
+            collateralRatio = int(vaultValues.val->ratio());
         }
 
         bool isVaultTokenLocked {false};
@@ -228,8 +230,10 @@ namespace {
         result.pushKV("collateralRatio", collateralRatio);
         if (verbose) {
             useNextPrice = true;
-            if (auto rate = pcustomcsview->GetLoanCollaterals(vaultId, *collaterals, height + 1, blockTime, useNextPrice, requireLivePrice)) {
-                nextCollateralRatio = int(rate.val->ratio());
+            if (auto vaultValues = pcustomcsview->GetVaultValueSheet(vaultId, *collaterals, height + 1, blockTime,
+                                                                     useNextPrice,
+                                                                     requireLivePrice)) {
+                nextCollateralRatio = int(vaultValues.val->ratio());
                 result.pushKV("nextCollateralRatio", nextCollateralRatio);
             }
             if (height >= Params().GetConsensus().FortCanningHillHeight) {
@@ -1653,9 +1657,9 @@ UniValue estimateloan(const JSONRPCRequest& request) {
 
     auto height = ::ChainActive().Height();
     auto blockTime = ::ChainActive().Tip()->GetBlockTime();
-    auto rate = pcustomcsview->GetLoanCollaterals(vaultId, *collaterals, height + 1, blockTime, false, true);
-    if (!rate.ok) {
-        throw JSONRPCError(RPC_MISC_ERROR, rate.msg);
+    auto vaultValues = pcustomcsview->GetVaultValueSheet(vaultId, *collaterals, height + 1, blockTime, false, true);
+    if (!vaultValues.ok) {
+        throw JSONRPCError(RPC_MISC_ERROR, vaultValues.msg);
     }
 
     CBalances loanBalances;
@@ -1684,7 +1688,7 @@ UniValue estimateloan(const JSONRPCRequest& request) {
                 throw JSONRPCError(RPC_MISC_ERROR, strprintf("No live fixed price for %s", tokenId));
             }
 
-            auto availableValue = MultiplyAmounts(rate.val->totalCollaterals, split);
+            auto availableValue = MultiplyAmounts(vaultValues.val->totalCollaterals, split);
             auto loanAmount = DivideAmounts(availableValue, price);
             auto amountRatio = MultiplyAmounts(DivideAmounts(loanAmount, ratio), 100);
 
@@ -1827,7 +1831,7 @@ UniValue estimatevault(const JSONRPCRequest& request) {
     LOCK(cs_main);
     auto height = (uint32_t) ::ChainActive().Height();
 
-    CCollateralLoans result{};
+    CVaultValueSheet result{};
 
     for (const auto& collateral : collateralBalances.balances) {
         auto collateralToken = pcustomcsview->HasLoanCollateralToken({collateral.first, height});

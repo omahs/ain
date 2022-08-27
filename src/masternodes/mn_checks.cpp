@@ -2923,12 +2923,13 @@ public:
             if (auto collaterals = mnview.GetVaultCollaterals(obj.vaultId)) {
                 for (int i = 0; i < 2; i++) {
                     bool useNextPrice = i > 0, requireLivePrice = true;
-                    auto collateralsLoans = mnview.GetLoanCollaterals(obj.vaultId, *collaterals, height, time, useNextPrice, requireLivePrice);
-                    if (!collateralsLoans)
-                        return std::move(collateralsLoans);
+                    auto vaultValues = mnview.GetVaultValueSheet(obj.vaultId, *collaterals, height, time,
+                                                                 useNextPrice, requireLivePrice);
+                    if (!vaultValues)
+                        return std::move(vaultValues);
 
-                    if (collateralsLoans.val->ratio() < scheme->ratio)
-                        return Res::Err("Vault does not have enough collateralization ratio defined by loan scheme - %d < %d", collateralsLoans.val->ratio(), scheme->ratio);
+                    if (vaultValues.val->ratio() < scheme->ratio)
+                        return Res::Err("Vault does not have enough collateralization ratio defined by loan scheme - %d < %d", vaultValues.val->ratio(), scheme->ratio);
                 }
             }
             if (height >= static_cast<uint32_t>(consensus.GreatWorldHeight)) {
@@ -2991,13 +2992,14 @@ public:
         bool useNextPrice = false, requireLivePrice = false;
         auto collaterals = mnview.GetVaultCollaterals(obj.vaultId);
 
-        auto collateralsLoans = mnview.GetLoanCollaterals(obj.vaultId, *collaterals, height, time, useNextPrice, requireLivePrice);
-        if (!collateralsLoans)
-            return std::move(collateralsLoans);
+        auto vaultValues = mnview.GetVaultValueSheet(obj.vaultId, *collaterals, height, time, useNextPrice,
+                                                     requireLivePrice);
+        if (!vaultValues)
+            return std::move(vaultValues);
 
         auto scheme = mnview.GetLoanScheme(vault->schemeId);
-        if (collateralsLoans.val->ratio() < scheme->ratio)
-            return Res::Err("Vault does not have enough collateralization ratio defined by loan scheme - %d < %d", collateralsLoans.val->ratio(), scheme->ratio);
+        if (vaultValues.val->ratio() < scheme->ratio)
+            return Res::Err("Vault does not have enough collateralization ratio defined by loan scheme - %d < %d", vaultValues.val->ratio(), scheme->ratio);
 
         return Res::Ok();
     }
@@ -3040,25 +3042,26 @@ public:
                     // check collaterals for active and next price
                     bool useNextPrice = i > 0, requireLivePrice = true;
 
-                    auto collateralsLoans = mnview.GetLoanCollaterals(obj.vaultId, *collaterals, height, time, useNextPrice, requireLivePrice);
-                    if (!collateralsLoans)
-                        return std::move(collateralsLoans);
+                    auto vaultValues = mnview.GetVaultValueSheet(obj.vaultId, *collaterals, height, time,
+                                                                 useNextPrice, requireLivePrice);
+                    if (!vaultValues)
+                        return std::move(vaultValues);
 
-                    if (collateralsLoans.val->ratio() < scheme->ratio)
-                        return Res::Err("Vault does not have enough collateralization ratio defined by loan scheme - %d < %d", collateralsLoans.val->ratio(), scheme->ratio);
+                    if (vaultValues.val->ratio() < scheme->ratio)
+                        return Res::Err("Vault does not have enough collateralization ratio defined by loan scheme - %d < %d", vaultValues.val->ratio(), scheme->ratio);
 
                     uint64_t totalCollaterals = 0;
 
-                    for (auto& col : collateralsLoans.val->collaterals)
+                    for (auto& col : vaultValues.val->collaterals)
                         if (col.nTokenId == DCT_ID{0}
                         || (tokenDUSD && col.nTokenId == tokenDUSD->first))
                             totalCollaterals += col.nValue;
 
                     if (static_cast<int>(height) < consensus.FortCanningHillHeight) {
-                        if (totalCollaterals < collateralsLoans.val->totalCollaterals / 2)
+                        if (totalCollaterals < vaultValues.val->totalCollaterals / 2)
                             return Res::Err("At least 50%% of the collateral must be in DFI");
                     } else {
-                        if (arith_uint256(totalCollaterals) * 100 < arith_uint256(collateralsLoans.val->totalLoans) * scheme->ratio / 2)
+                        if (arith_uint256(totalCollaterals) * 100 < arith_uint256(vaultValues.val->totalLoans) * scheme->ratio / 2)
                             return static_cast<int>(height) < consensus.FortCanningRoadHeight ? Res::Err("At least 50%% of the minimum required collateral must be in DFI")
                                                                                               : Res::Err("At least 50%% of the minimum required collateral must be in DFI or DUSD");
                     }
@@ -3199,25 +3202,26 @@ public:
             // check ratio against current and active price
             bool useNextPrice = i > 0, requireLivePrice = true;
 
-            auto collateralsLoans = mnview.GetLoanCollaterals(obj.vaultId, *collaterals, height, time, useNextPrice, requireLivePrice);
-            if (!collateralsLoans)
-                return std::move(collateralsLoans);
+            auto vaultValues = mnview.GetVaultValueSheet(obj.vaultId, *collaterals, height, time, useNextPrice,
+                                                         requireLivePrice);
+            if (!vaultValues)
+                return std::move(vaultValues);
 
-            if (collateralsLoans.val->ratio() < scheme->ratio)
-                return Res::Err("Vault does not have enough collateralization ratio defined by loan scheme - %d < %d", collateralsLoans.val->ratio(), scheme->ratio);
+            if (vaultValues.val->ratio() < scheme->ratio)
+                return Res::Err("Vault does not have enough collateralization ratio defined by loan scheme - %d < %d", vaultValues.val->ratio(), scheme->ratio);
 
             uint64_t totalCollaterals = 0;
 
-            for (auto& col : collateralsLoans.val->collaterals)
+            for (auto& col : vaultValues.val->collaterals)
                 if (col.nTokenId == DCT_ID{0}
                 || (tokenDUSD && col.nTokenId == tokenDUSD->first))
                     totalCollaterals += col.nValue;
 
             if (static_cast<int>(height) < consensus.FortCanningHillHeight) {
-                if (totalCollaterals < collateralsLoans.val->totalCollaterals / 2)
+                if (totalCollaterals < vaultValues.val->totalCollaterals / 2)
                     return Res::Err("At least 50%% of the collateral must be in DFI when taking a loan.");
             } else {
-                if (arith_uint256(totalCollaterals) * 100 < arith_uint256(collateralsLoans.val->totalLoans) * scheme->ratio / 2)
+                if (arith_uint256(totalCollaterals) * 100 < arith_uint256(vaultValues.val->totalLoans) * scheme->ratio / 2)
                     return static_cast<int>(height) < consensus.FortCanningRoadHeight ? Res::Err("At least 50%% of the minimum required collateral must be in DFI when taking a loan.")
                                                                                       : Res::Err("At least 50%% of the minimum required collateral must be in DFI or DUSD when taking a loan.");
             }
@@ -3372,18 +3376,20 @@ public:
                 if (!rate)
                     return Res::Err("Cannot get interest rate for this token (%s)!", loanToken->symbol);
 
-                auto subInterest = TotalInterest(*rate, height);
+                auto currentTotalInterest = TotalInterest(*rate, height);
 
-                // In the case of negative subInterest the amount ends up being added to paybackAmount
-                auto subLoan = paybackAmount - subInterest;
+                // In the case of negative interest the amount ends up being added to paybackAmount
+                auto subLoan = paybackAmount - currentTotalInterest;
+                auto subInterest = currentTotalInterest;
 
                 if (paybackAmount < subInterest)
                 {
-                    subInterest = paybackAmount;
                     subLoan = 0;
+                    subInterest = paybackAmount;
                 }
                 else if (currentLoanAmount - subLoan < 0)
                 {
+                    // In case of overpay, ensure correct maxed amount.
                     subLoan = currentLoanAmount;
                 }
 

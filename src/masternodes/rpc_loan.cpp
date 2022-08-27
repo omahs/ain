@@ -1400,11 +1400,12 @@ UniValue getloaninfo(const JSONRPCRequest& request) {
             auto collaterals = view.GetVaultCollaterals(vaultId);
             if (!collaterals)
                 collaterals = CBalances{};
-            auto rate = view.GetLoanCollaterals(vaultId, *collaterals, height, lastBlockTime, useNextPrice, requireLivePrice);
-            if (rate)
+            auto vaultValues = view.GetVaultValueSheet(vaultId, *collaterals, height, lastBlockTime, useNextPrice,
+                                                       requireLivePrice);
+            if (vaultValues)
             {
-                colsValTotal.fetch_add(rate.val->totalCollaterals, std::memory_order_relaxed);
-                loansValTotal.fetch_add(rate.val->totalLoans, std::memory_order_relaxed);
+                colsValTotal.fetch_add(vaultValues.val->totalCollaterals, std::memory_order_relaxed);
+                loansValTotal.fetch_add(vaultValues.val->totalLoans, std::memory_order_relaxed);
             }
             vaultsTotal.fetch_add(1, std::memory_order_relaxed);
         });
