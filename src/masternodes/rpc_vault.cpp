@@ -154,8 +154,8 @@ namespace {
         UniValue loanBalances{UniValue::VARR};
         UniValue interestAmounts{UniValue::VARR};
         UniValue interestsPerBlockBalances{UniValue::VARR};
-        std::map<DCT_ID, CNegativeInterest> interestsPerBlockHighPrecission;
-        CNegativeInterest interestsPerBlockValueHighPrecision;
+        std::map<DCT_ID, CInterestAmount> interestsPerBlockHighPrecission;
+        CInterestAmount interestsPerBlockValueHighPrecision;
         TAmounts interestsPerBlock{};
         CAmount totalInterestsPerBlock{0};
 
@@ -179,7 +179,7 @@ namespace {
                         }
                         if (verbose) {
                             if (height >= Params().GetConsensus().GreatWorldHeight) {
-                                interestsPerBlockValueHighPrecision = InterestAddition(interestsPerBlockValueHighPrecision, {rate->interestPerBlock.negative, static_cast<base_uint<128>>(price) * rate->interestPerBlock.amount / COIN});
+                                interestsPerBlockValueHighPrecision = InterestAddition(interestsPerBlockValueHighPrecision, {static_cast<base_uint<128>>(price) * rate->interestPerBlock.amount / COIN, rate->interestPerBlock.negative});
                                 interestsPerBlockHighPrecission[tokenId] = rate->interestPerBlock;
                             } else if (height >= Params().GetConsensus().FortCanningHillHeight) {
                                 interestsPerBlockValueHighPrecision.amount += static_cast<base_uint<128>>(price) * rate->interestPerBlock.amount / COIN;

@@ -2878,7 +2878,7 @@ public:
         }
 
         // delete all interest to vault
-        res = mnview.DeleteInterest(obj.vaultId, height);
+        res = mnview.EraseInterest(obj.vaultId, height);
         if (!res)
             return res;
 
@@ -2937,7 +2937,8 @@ public:
                     for (const auto& [tokenId, tokenAmount] : loanTokens->balances) {
                         const auto loanToken = mnview.GetLoanTokenByID(tokenId);
                         assert(loanToken);
-                        res = mnview.StoreInterest(height, obj.vaultId, obj.schemeId, tokenId, loanToken->interest, 0);
+                        res = mnview.IncreaseInterest(height, obj.vaultId, obj.schemeId, tokenId, loanToken->interest,
+                                                      0);
                         if (!res) {
                             return res;
                         }
@@ -3146,9 +3147,10 @@ public:
             }
 
             if (wipeInterestToHeight) {
-                mnview.WipeInterest(height, obj.vaultId, vault->schemeId, tokenId);
+                mnview.ResetInterest(height, obj.vaultId, vault->schemeId, tokenId);
             } else {
-                res = mnview.StoreInterest(height, obj.vaultId, vault->schemeId, tokenId, loanToken->interest, loanAmountChange);
+                res = mnview.IncreaseInterest(height, obj.vaultId, vault->schemeId, tokenId, loanToken->interest,
+                                              loanAmountChange);
                 if (!res)
                     return res;
             }
@@ -3392,13 +3394,14 @@ public:
                 // If interest is positive erase it from the store. If interest negative or sub loan equals the current loan
                 // then wipe interest otherwise update interest to height, this includes updating sub-Sat amounts.
                 if (subInterest > 0) {
-                    res = mnview.EraseInterest(height, obj.vaultId, vault->schemeId, loanTokenId, subLoan, subInterest);
+                    res = mnview.ReduceInterest(height, obj.vaultId, vault->schemeId, loanTokenId, subLoan, subInterest);
                     if (!res)
                         return res;
                 } else if (subInterest < 0 || subLoan == currentLoanAmount) {
-                    mnview.WipeInterest(height, obj.vaultId, vault->schemeId, loanTokenId);
+                    mnview.ResetInterest(height, obj.vaultId, vault->schemeId, loanTokenId);
                 } else {
-                    res = mnview.StoreInterest(height, obj.vaultId, vault->schemeId, loanTokenId, loanToken->interest, 0);
+                    res = mnview.IncreaseInterest(height, obj.vaultId, vault->schemeId, loanTokenId,
+                                                  loanToken->interest, 0);
                     if (!res)
                         return res;
                 }
