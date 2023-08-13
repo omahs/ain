@@ -1,7 +1,7 @@
 Translations
 ============
 
-> NOTE: This section is a work in progress for DeFi Blockchain, and may not be applicable at it's current state.
+> NOTE: This section is a work in progress for DeFi Blockchain, and may not be applicable at its current state.
 
 The Bitcoin-Core project has been designed to support multiple localisations. This makes adding new phrases, and completely new languages easily achievable. For managing all application translations, Bitcoin-Core makes use of the Transifex online translation management tool.
 
